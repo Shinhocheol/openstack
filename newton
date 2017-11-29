@@ -2,11 +2,14 @@ openstack newton version
 
 os : ubutu 16.04 LTS
 
-# 각 노드에 hosts 파일 설정 
+
+
+노드 호스트 이름을 controller 로 설정합니다.
+/etc/hosts 파일을 수정하여 다음을 포함합니다:
+
 vi /etc/hosts
 192.168.56.101    controller
 192.168.56.102     compute 
-
 
 # controller node 에서 ping 테스트 
 ping compute 
@@ -15,14 +18,14 @@ ping compute
 ping controller 
 
 
+# Newtork Time Protocol (NTP)
 # 각 노드에 chrony 패지 설치 
 
 apt install chrony
 
-# 컨트롤러 확인 
+# controller node  
 
 chronyc sources
-
 
 # compute node  설정 
 
@@ -32,11 +35,12 @@ server controller iburst
 
 service chrony restart
 
+#검증 과정
 chronyc sources
 
 
 
-# opnestack 패키지 설치 진행 각 node 설치 
+# opnestack 패키지 설치 진행 각 node 설치 ( controller && compute ) 
 
  apt install software-properties-common
 
@@ -47,7 +51,11 @@ chronyc sources
  apt install python-openstackclient
 
 
-# controller node db 설치 진행 
+# controller node SQL 데이터베이스 설치 
+MariaDB(/w Galera) 설치
+Tip： Mariadb(v5.5.x)는 권장하지 않음.(5.5.x와 10.0.x 버전의 Features 비교)
+https://mariadb.com/kb/en/library/upgrading-from-mariadb-55-to-mariadb-100/
+
 apt install mariadb-server python-pymysql
 
 cat << EOF >> /etc/mysql/mariadb.conf.d/99-openstack.cnf 
@@ -65,8 +73,10 @@ service mysql restart
 
 mysql_secure_installation
 
-vi /root/mysql
+
+cat << EOF >> /root/mysql
 openstack 
+EOF
 
 # controller node 메시지 큐 rabbitmq 설치
 
@@ -86,6 +96,8 @@ vi /etc/memcached.conf
 
 service memcached restart
 
+
+# Identity 서비스
 # controller db  keystone 계정 설정
 
 mysql -uroot -p`cat /root/mysql` -e "CREATE DATABASE keystone;"
@@ -110,7 +122,6 @@ connection = sqlite:////var/lib/keystone/keystone.db ← 제거
 connection = mysql+pymysql://keystone:openstack@controller/keystone
 
 [token]
-...
 provider = fernet
 
 # DB 구성 
@@ -172,7 +183,6 @@ vi /etc/keystone/keystone-paste.ini
 $ unset OS_AUTH_URL OS_PASSWORD
 
 
-
 # admin 사용자로, 인증 토큰을 요청
 $ openstack --os-auth-url http://controller:35357/v3 \
   --os-project-domain-name Default --os-user-domain-name Default \
@@ -185,7 +195,6 @@ $ openstack --os-auth-url http://controller:5000/v3 \
   --os-project-name demo --os-username demo token issue
 
 
-
 cat <<EOF>>  /root/admin-openrc 
 export OS_PROJECT_DOMAIN_NAME=Default
 export OS_USER_DOMAIN_NAME=Default
@@ -196,8 +205,6 @@ export OS_AUTH_URL=http://controller:35357/v3
 export OS_IDENTITY_API_VERSION=3
 export OS_IMAGE_API_VERSION=2
 EOF
-
-
 
 cat <<EOF>> /root/demo-openrc
 export OS_PROJECT_DOMAIN_NAME=Default
@@ -255,7 +262,6 @@ filesystem_store_datadir = /var/lib/glance/images/
 
 [database]
 sqlite_db = /var/lib/glance/glance.sqlite ← 제거 
-
 connection = mysql+pymysql://glance:openstack@controller/glance
 
 [keystone_authtoken]
@@ -271,12 +277,10 @@ username = glance
 password = openstack
 
 [paste_deploy]
-
 flavor = keystone
 
 
 cp -a /etc/glance/glance-registry.conf /etc/glance/glance-registry.conf_org
-
 cat /etc/glance/glance-registry.conf_org | grep -v ^$ | grep -v ^# > /etc/glance/glance-registry.conf
 
 vi /etc/glance/glance-registry.conf
@@ -311,8 +315,6 @@ openstack image create "cirros" \
  --public
 
 openstack image list
-
-
 
 #### compute node 설치  ####
 
@@ -356,6 +358,14 @@ cat /etc/nova/nova.conf_org | grep -v ^$ | grep -v ^# > /etc/nova/nova.conf
 vi /etc/nova/nova.conf
 
 [DEFAULT]
+dhcpbridge_flagfile=/etc/nova/nova.conf
+dhcpbridge=/usr/bin/nova-dhcpbridge
+log-dir=/var/log/nova
+state_path=/var/lib/nova
+force_dhcp_release=True
+verbose=True
+ec2_private_dns_show_ip=True
+enabled_apis=osapi_compute,metadata
 auth_strategy = keystone
 transport_url = rabbit://openstack:openstack@controller
 my_ip = 192.168.56.101
@@ -396,8 +406,6 @@ api_servers = http://controller:9292
 
 lock_path = /var/lib/nova/tmp
 
-
-
 /bin/sh -c "nova-manage api_db sync" nova
 /bin/sh -c "nova-manage db sync" nova
 
@@ -419,9 +427,15 @@ cat /etc/nova/nova.conf_org | grep -v ^$ | grep -v ^# > /etc/nova/nova.conf
 vi /etc/nova/nova.conf
 
 [DEFAULT]
-
+dhcpbridge_flagfile=/etc/nova/nova.conf
+dhcpbridge=/usr/bin/nova-dhcpbridge
+log-dir=/var/log/nova
+state_path=/var/lib/nova
+force_dhcp_release=True
+verbose=True
+ec2_private_dns_show_ip=True
+enabled_apis=osapi_compute,metadata
 transport_url = rabbit://openstack:openstack@controller
-
 auth_strategy = keystone
 my_ip = 192.168.56.102
 use_neutron = True
@@ -567,7 +581,7 @@ vi /etc/neutron/plugins/ml2/linuxbridge_agent.ini
 [agent]
 
 [linux_bridge]
-physical_interface_mappings = provider:enp0s3
+physical_interface_mappings = provider:enp0s8
 
 [securitygroup]
 enable_security_group = True
@@ -682,7 +696,7 @@ vi /etc/neutron/plugins/ml2/linuxbridge_agent.ini
 [agent]
 
 [linux_bridge]
-physical_interface_mappings = provider:enp0s3
+physical_interface_mappings = provider:enp0s8
 
 [securitygroup]
 enable_security_group = True
@@ -904,6 +918,7 @@ username = cinder
 password = openstack
 
 [lvm]
+...
 volume_driver = cinder.volume.drivers.lvm.LVMVolumeDriver
 volume_group = cinder-volumes
 iscsi_protocol = iscsi
@@ -918,3 +933,341 @@ service cinder-volume restart
 
 # controller node 에서 검증
 openstack volume service list
+
+
+
+# Object Storage 설치 
+# controller node 설치 
+
+openstack user create --domain default --password-prompt swift
+
+openstack role add --project service --user swift admin
+
+openstack service create --name swift \
+  --description "OpenStack Object Storage" object-store
+
+openstack endpoint create --region RegionOne \
+  object-store public http://controller:8080/v1/AUTH_%\(tenant_id\)s
+
+openstack endpoint create --region RegionOne \
+  object-store internal http://controller:8080/v1/AUTH_%\(tenant_id\)s
+
+ openstack endpoint create --region RegionOne \
+  object-store admin http://controller:8080/v1
+
+
+apt-get install swift swift-proxy python-swiftclient \
+  python-keystoneclient python-keystonemiddleware \
+  memcached
+
+mkdir -p /etc/swift
+
+cd /etc/swift
+
+curl -o /etc/swift/proxy-server.conf https://git.openstack.org/cgit/openstack/swift/plain/etc/proxy-server.conf-sample?h=stable/ocata
+
+cp -a /etc/swift/proxy-server.conf /etc/swift/proxy-server.conf_org
+
+cat /etc/swift/proxy-server.conf_org | grep -v ^$ | grep -v ^# > /etc/swift/proxy-server.conf
+
+vi /etc/swift/proxy-server.conf
+
+[DEFAULT]
+...
+bind_port = 8080
+user = swift
+swift_dir = /etc/swift
+
+[pipeline:main]
+pipeline = catch_errors gatekeeper healthcheck proxy-logging cache container_sync bulk ratelimit authtoken keystoneauth container-quotas account-quotas slo dlo versioned_writes proxy-logging proxy-server
+
+[app:proxy-server]
+use = egg:swift#proxy
+account_autocreate = True
+
+[filter:keystoneauth]
+use = egg:swift#keystoneauth
+operator_roles = admin,user
+
+[filter:authtoken]
+paste.filter_factory = keystonemiddleware.auth_token:filter_factory
+auth_uri = http://controller:5000
+auth_url = http://controller:35357
+memcached_servers = controller:11211
+auth_type = password
+project_domain_name = default
+user_domain_name = default
+project_name = service
+username = swift
+password = SWIFT_PASS
+delay_auth_decision = True
+
+
+[filter:cache]
+use = egg:swift#memcache
+memcache_servers = controller:11211
+
+
+# compute node
+apt-get install xfsprogs rsync
+
+# 디스크 파티션  & mount 
+
+fdisk -l
+ fdisk  /dev/sdc
+ fdisk  /dev/sdd
+ fdisk  /dev/sde
+
+
+mkfs.ext4 /dev/sdd1
+mkfs.ext4 /dev/sdc1
+mkfs.ext4 /dev/sde1
+
+mkdir -p /srv/node/sdc1
+mkdir -p /srv/node/sdd1
+mkdir -p /srv/node/sde1
+
+
+mount /dev/sdc1 /srv/node/sdc1
+mount /dev/sdd1 /srv/node/sdd1
+mount /dev/sde1 /srv/node/sde1
+
+
+vi  /etc/rsyncd.conf
+
+uid = swift
+gid = swift
+log file = /var/log/rsyncd.log
+pid file = /var/run/rsyncd.pid
+address = 192.168.56.102
+
+[account]
+max connections = 2
+path = /srv/node/
+read only = False
+lock file = /var/lock/account.lock
+
+[container]
+max connections = 2
+path = /srv/node/
+read only = False
+lock file = /var/lock/container.lock
+
+[object]
+max connections = 2
+path = /srv/node/
+read only = False
+lock file = /var/lock/object.lock
+
+vi /etc/default/rsync
+RSYNC_ENABLE=true
+
+
+cp -a /etc/swift/account-server.conf /etc/swift/account-server.conf_org
+cp -a /etc/swift/object-server.conf /etc/swift/object-server.conf_org
+cp -a /etc/swift/container-server.conf /etc/swift/container-server.conf_org
+
+
+cat /etc/swift/account-server.conf_org | grep -v ^$ | grep -v ^# > /etc/swift/account-server.conf
+cat /etc/swift/object-server.conf_org | grep -v ^$ | grep -v ^# > /etc/swift/object-server.conf
+cat /etc/swift/container-server.conf_org | grep -v ^$ | grep -v ^# > /etc/swift/container-server.conf
+
+vi /etc/swift/account-server.conf
+
+[DEFAULT]
+bind_ip = 192.168.56.102
+bind_port = 6202
+user = swift
+swift_dir = /etc/swift
+devices = /srv/node
+mount_check = True
+
+[pipeline:main]
+pipeline = healthcheck recon account-server
+
+[app:account-server]
+use = egg:swift#account
+
+[filter:healthcheck]
+use = egg:swift#healthcheck
+
+[filter:recon]
+use = egg:swift#recon
+recon_cache_path = /var/cache/swift
+
+[account-replicator]
+
+[account-auditor]
+
+[account-reaper]
+
+[filter:xprofile]
+use = egg:swift#xprofile
+
+vi  /etc/swift/container-server.conf 
+
+[DEFAULT]
+bind_ip = 192.168.56.102
+bind_port = 6201
+user = swift
+swift_dir = /etc/swift
+devices = /srv/node
+mount_check = True
+
+[pipeline:main]
+pipeline = healthcheck recon container-server
+
+[app:container-server]
+use = egg:swift#container
+
+[filter:healthcheck]
+use = egg:swift#healthcheck
+
+[filter:recon]
+use = egg:swift#recon
+recon_cache_path = /var/cache/swift
+
+[container-replicator]
+
+[container-updater]
+
+[container-auditor]
+
+[container-sync]
+
+[filter:xprofile]
+use = egg:swift#xprofile
+
+
+vi /etc/swift/object-server.conf 
+[DEFAULT]
+bind_ip = 192.168.56.102
+bind_port = 6200
+user = swift
+swift_dir = /etc/swift
+devices = /srv/node
+mount_check = True
+
+[pipeline:main]
+pipeline = healthcheck recon object-server
+
+[app:object-server]
+use = egg:swift#object
+
+[filter:healthcheck]
+use = egg:swift#healthcheck
+
+[filter:recon]
+use = egg:swift#recon
+recon_cache_path = /var/cache/swift
+recon_lock_path = /var/lock
+
+[object-replicator]
+
+[object-reconstructor]
+
+[object-updater]
+
+[object-auditor]
+
+[filter:xprofile]
+use = egg:swift#xprofile
+
+
+chown -R swift:swift /srv/node
+
+mkdir -p /var/cache/swift
+chown -R root:swift /var/cache/swift
+chmod -R 775 /var/cache/swift
+
+
+# 링 생성 및 초기화 
+# controller node 진행 
+
+cd  /etc/swift 
+swift-ring-builder account.builder create 10 3 1
+
+swift-ring-builder account.builder \
+  add --region 1 --zone 1 --ip 192.168.56.102 --port 6202 \
+  --device sdc1 --weight 100
+
+swift-ring-builder account.builder \
+ add --region 1 --zone 1 --ip 192.168.56.102 --port 6202 \
+ --device sdd1 --weight 100
+
+swift-ring-builder account.builder \
+ add --region 1 --zone 1 --ip 192.168.56.102 --port 6202 \
+ --device sde1 --weight 100
+
+
+swift-ring-builder account.builder
+
+swift-ring-builder account.builder rebalance
+
+
+swift-ring-builder container.builder create 10 3 1
+
+swift-ring-builder container.builder add \
+  --region 1 --zone 1 --ip 192.168.56.102 --port 6201 --device sdc1 --weight 100
+
+swift-ring-builder container.builder add \
+  --region 1 --zone 1 --ip 192.168.56.102 --port 6201 --device sdd1 --weight 100
+
+swift-ring-builder container.builder add \
+ --region 1 --zone 1 --ip 192.168.56.102 --port 6201 --device sde1 --weight 100
+
+swift-ring-builder container.builder
+swift-ring-builder container.builder rebalance
+
+swift-ring-builder object.builder create 10 3 1
+
+swift-ring-builder object.builder add \
+ --region 1 --zone 1 --ip 192.168.56.102 --port 6200 --device sdc1 --weight 100
+
+swift-ring-builder object.builder add \
+ --region 1 --zone 1 --ip 192.168.56.102 --port 6200 --device sdd1 --weight 100
+
+swift-ring-builder object.builder add \
+ --region 1 --zone 1 --ip 192.168.56.102 --port 6200 --device sde1 --weight 100
+
+swift-ring-builder object.builder
+swift-ring-builder object.builder rebalance
+
+
+
+curl -o /etc/swift/swift.conf \
+  https://git.openstack.org/cgit/openstack/swift/plain/etc/swift.conf-sample?h=stable/ocata
+
+cp -a /etc/swift/swift.conf /etc/swift/swift.conf_org
+cat /etc/swift/swift.conf_org | grep -v ^$ | grep -v ^# > /etc/swift/swift.conf
+
+vi /etc/swift/swift.conf
+
+[swift-hash]
+...
+swift_hash_path_suffix = openstack_swift_test_suffix
+swift_hash_path_prefix = openstack_swift_test_prefix
+
+
+scp /etc/swift/swift.conf hcshin@compute:~/
+scp /etc/swift/*.ring.gz hcshin@compute:~/
+
+# compute node 
+mv /home/hcshin/swift.conf /etc/swift/
+mv /home/hcshin/*.ring.gz /etc/swift/
+chown -R root:swift /etc/swift
+
+
+# controller 프로세스 재시작 
+ service memcached restart
+ service swift-proxy restart
+
+# copmute node 프로세스 재시작 
+swift-init all start
+ps -ef | grep swift
+
+# controller node 검증
+cd /root/
+. demo-openrc 
+
+swift stat
