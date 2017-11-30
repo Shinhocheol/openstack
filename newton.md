@@ -1,47 +1,44 @@
-openstack newton version 
-
-os : ubutu 16.04 LTS
-
-
-
-노드 호스트 이름을 controller 로 설정합니다.
-/etc/hosts 파일을 수정하여 다음을 포함합니다:
-
+# OPENSTACK 메뉴얼 설치 
+ ## 설치 os : ubutu 16.04 LTS
+ ## openstack ver ： newton 
+### 각 노드에 hosts 파일 설정 
+```
 vi /etc/hosts
 192.168.56.101    controller
 192.168.56.102     compute 
+```
 
-# controller node 에서 ping 테스트 
+### controller node 에서 ping 테스트 
+```
 ping compute 
-
-# compute node 에서 ping 테스트 
+```
+### compute node 에서 ping 테스트 
+```
 ping controller 
+```
 
-
-# Newtork Time Protocol (NTP)
-# 각 노드에 chrony 패지 설치 
-
+### 각 노드에 chrony 패지 설치 
+```
 apt install chrony
-
-# controller node  
-
+```
+### 컨트롤러 확인 
+```
 chronyc sources
-
-# compute node  설정 
-
+```
+### compute node  설정 
+```
 vi /etc/chrony/chrony.conf
 
 server controller iburst
 
 service chrony restart
 
-#검증 과정
 chronyc sources
+```
 
 
-
-# opnestack 패키지 설치 진행 각 node 설치 ( controller && compute ) 
-
+### opnestack 패키지 설치 진행 각 node 설치 
+```
  apt install software-properties-common
 
  add-apt-repository cloud-archive:newton
@@ -49,13 +46,10 @@ chronyc sources
  apt update && apt dist-upgrade
 
  apt install python-openstackclient
+```
 
-
-# controller node SQL 데이터베이스 설치 
-MariaDB(/w Galera) 설치
-Tip： Mariadb(v5.5.x)는 권장하지 않음.(5.5.x와 10.0.x 버전의 Features 비교)
-https://mariadb.com/kb/en/library/upgrading-from-mariadb-55-to-mariadb-100/
-
+### controller node db 설치 진행 
+```
 apt install mariadb-server python-pymysql
 
 cat << EOF >> /etc/mysql/mariadb.conf.d/99-openstack.cnf 
@@ -73,21 +67,20 @@ service mysql restart
 
 mysql_secure_installation
 
-
 cat << EOF >> /root/mysql
 openstack 
 EOF
-
-# controller node 메시지 큐 rabbitmq 설치
-
+```
+### controller node 메시지 큐 rabbitmq 설치
+```
 apt install rabbitmq-server
 
 rabbitmqctl add_user openstack openstack
 
 rabbitmqctl set_permissions openstack ".*" ".*" ".*"
-
-# controller node memcached 설치 
-
+```
+### controller node memcached 설치 
+```
 apt install memcached python-memcache
 
 vi /etc/memcached.conf
@@ -95,10 +88,8 @@ vi /etc/memcached.conf
 -l 192.168.56.101
 
 service memcached restart
-
-
-# Identity 서비스
-# controller db  keystone 계정 설정
+```
+#### controller db  keystone 계정 설정
 
 mysql -uroot -p`cat /root/mysql` -e "CREATE DATABASE keystone;"
 mysql -uroot -p`cat /root/mysql`  -e "GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'localhost'IDENTIFIED BY 'openstack';"
@@ -122,6 +113,7 @@ connection = sqlite:////var/lib/keystone/keystone.db ← 제거
 connection = mysql+pymysql://keystone:openstack@controller/keystone
 
 [token]
+...
 provider = fernet
 
 # DB 구성 
@@ -183,6 +175,7 @@ vi /etc/keystone/keystone-paste.ini
 $ unset OS_AUTH_URL OS_PASSWORD
 
 
+
 # admin 사용자로, 인증 토큰을 요청
 $ openstack --os-auth-url http://controller:35357/v3 \
   --os-project-domain-name Default --os-user-domain-name Default \
@@ -195,6 +188,7 @@ $ openstack --os-auth-url http://controller:5000/v3 \
   --os-project-name demo --os-username demo token issue
 
 
+
 cat <<EOF>>  /root/admin-openrc 
 export OS_PROJECT_DOMAIN_NAME=Default
 export OS_USER_DOMAIN_NAME=Default
@@ -205,6 +199,8 @@ export OS_AUTH_URL=http://controller:35357/v3
 export OS_IDENTITY_API_VERSION=3
 export OS_IMAGE_API_VERSION=2
 EOF
+
+
 
 cat <<EOF>> /root/demo-openrc
 export OS_PROJECT_DOMAIN_NAME=Default
@@ -262,6 +258,7 @@ filesystem_store_datadir = /var/lib/glance/images/
 
 [database]
 sqlite_db = /var/lib/glance/glance.sqlite ← 제거 
+
 connection = mysql+pymysql://glance:openstack@controller/glance
 
 [keystone_authtoken]
@@ -277,10 +274,12 @@ username = glance
 password = openstack
 
 [paste_deploy]
+
 flavor = keystone
 
 
 cp -a /etc/glance/glance-registry.conf /etc/glance/glance-registry.conf_org
+
 cat /etc/glance/glance-registry.conf_org | grep -v ^$ | grep -v ^# > /etc/glance/glance-registry.conf
 
 vi /etc/glance/glance-registry.conf
@@ -315,6 +314,8 @@ openstack image create "cirros" \
  --public
 
 openstack image list
+
+
 
 #### compute node 설치  ####
 
@@ -358,14 +359,6 @@ cat /etc/nova/nova.conf_org | grep -v ^$ | grep -v ^# > /etc/nova/nova.conf
 vi /etc/nova/nova.conf
 
 [DEFAULT]
-dhcpbridge_flagfile=/etc/nova/nova.conf
-dhcpbridge=/usr/bin/nova-dhcpbridge
-log-dir=/var/log/nova
-state_path=/var/lib/nova
-force_dhcp_release=True
-verbose=True
-ec2_private_dns_show_ip=True
-enabled_apis=osapi_compute,metadata
 auth_strategy = keystone
 transport_url = rabbit://openstack:openstack@controller
 my_ip = 192.168.56.101
@@ -406,6 +399,8 @@ api_servers = http://controller:9292
 
 lock_path = /var/lib/nova/tmp
 
+
+
 /bin/sh -c "nova-manage api_db sync" nova
 /bin/sh -c "nova-manage db sync" nova
 
@@ -427,15 +422,9 @@ cat /etc/nova/nova.conf_org | grep -v ^$ | grep -v ^# > /etc/nova/nova.conf
 vi /etc/nova/nova.conf
 
 [DEFAULT]
-dhcpbridge_flagfile=/etc/nova/nova.conf
-dhcpbridge=/usr/bin/nova-dhcpbridge
-log-dir=/var/log/nova
-state_path=/var/lib/nova
-force_dhcp_release=True
-verbose=True
-ec2_private_dns_show_ip=True
-enabled_apis=osapi_compute,metadata
+
 transport_url = rabbit://openstack:openstack@controller
+
 auth_strategy = keystone
 my_ip = 192.168.56.102
 use_neutron = True
@@ -581,7 +570,7 @@ vi /etc/neutron/plugins/ml2/linuxbridge_agent.ini
 [agent]
 
 [linux_bridge]
-physical_interface_mappings = provider:enp0s8
+physical_interface_mappings = provider:enp0s3
 
 [securitygroup]
 enable_security_group = True
@@ -696,7 +685,7 @@ vi /etc/neutron/plugins/ml2/linuxbridge_agent.ini
 [agent]
 
 [linux_bridge]
-physical_interface_mappings = provider:enp0s8
+physical_interface_mappings = provider:enp0s3
 
 [securitygroup]
 enable_security_group = True
