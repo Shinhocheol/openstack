@@ -1,15 +1,69 @@
-2017.11.30 (목) Class 3
+# 2017.11.30 (목) Class 3
 ========================
+ ### 메뉴얼 설치 
+  - OS Ver : ubutu 16.04.03 LTS
+  - OPENSTACK Ver ： newton
 
-# OPENSTACK 메뉴얼 설치 
- ## os ver : ubutu 16.04 LTS
- ## openstack ver ： newton 
-  ### 각 노드에 hosts 파일 설정 
-```bash
+ ### virtualbox h/w 설정 
+```
+### Controller node 
+ - network device 1： 호스트전용 네트워크 (enp0s3)
+ - network device 2： 브리지모드 (enp0s8)
+ - network device 3： NAT (enp0s9)
+ - disk ： 20G  ( OS용)
+ - HOST NAME ： controller
+
+### Compute node
+ - network device 1： 호스트전용 네트워크 (enp0s3)
+ - network device 2： 브리지모드 (enp0s8)
+ - network device 3： NAT (enp0s9)
+ - disk ： 20G ( OS용 )
+ - disk 1 ： 8G ( Block Storage service)
+ - disk 2 ： 8G *  3ea ( Object Storage services )
+ - HOST NAME ： compute
+
+### 네트워크 세팅 
+ #### controller nod network setting 
+vi /etc/network/interfaces
+
+auto enp0s3
+iface enp0s3 inet static
+   address 192.168.56.101
+   netmask 255.255.255.0
+   gateway 192.168.56.1
+   dns-namesrvers 8.8.8.8
+
+auto enp0s8
+iface enp0s8 inet dhcp
+
+auto enp0s9
+iface enp0s9 inet dhcp
+
+
+#### Compute node network setting 
+
+vi /etc/network/interfaces
+auto enp0s3
+iface enp0s3 inet static
+ address 192.168.56.102
+ netmask 255.255.255.0
+ gateway 192.168.56.1
+ dns-namesrvers 8.8.8.8
+
+auto enp0s8
+iface enp0s8 inet dhcp
+
+auto enp0s9
+iface enp0s9 inet dhcp
+
+````
+
+### 각 노드에 hosts 파일 설정 
+````
 vi /etc/hosts
 192.168.56.101    controller
 192.168.56.102     compute 
-```
+````
 
 ### controller node 에서 ping 테스트 
 ```
@@ -28,6 +82,7 @@ apt install chrony
 ```
 chronyc sources
 ```
+
 ### compute node  설정 
 ```
 vi /etc/chrony/chrony.conf
@@ -41,7 +96,7 @@ chronyc sources
 
 
 ### opnestack 패키지 설치 진행 각 node 설치 
-``` bash
+```
  apt install software-properties-common
 
  add-apt-repository cloud-archive:newton
@@ -92,20 +147,21 @@ vi /etc/memcached.conf
 
 service memcached restart
 ```
-#### controller db  keystone 계정 설정
 
+### controller db  keystone 계정 설정
+```
 mysql -uroot -p`cat /root/mysql` -e "CREATE DATABASE keystone;"
 mysql -uroot -p`cat /root/mysql`  -e "GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'localhost'IDENTIFIED BY 'openstack';"
 mysql -uroot -p`cat /root/mysql`  -e "GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'%'  IDENTIFIED BY 'openstack';"
+```
 
-
-# controller kesytone 설치 
-
+### controller kesytone 설치 
+```
 apt install keystone
 
 cp -a /etc/keystone/keystone.conf /etc/keystone/keystone.conf_org
 
-cat /etc/keystone/keystone.conf_org | grep -v ^$ | grep -v ^# > /etc/keystone/keystone.conf
+cat /etc/keystone/keystone.conf_org | grep -v ^$ | grep -v ^### > /etc/keystone/keystone.conf
 
 vi /etc/keystone/keystone.conf
 
@@ -118,11 +174,13 @@ connection = mysql+pymysql://keystone:openstack@controller/keystone
 [token]
 ...
 provider = fernet
-
-# DB 구성 
+```
+### DB 구성 
+```
 /bin/sh -c "keystone-manage db_sync" keystone
-
-# Fernet 키 저장소를 초기화 
+```
+### Fernet 키 저장소를 초기화 
+```
 keystone-manage fernet_setup --keystone-user keystone --keystone-group keystone
 keystone-manage credential_setup --keystone-user keystone --keystone-group keystone
 
@@ -134,15 +192,15 @@ keystone-manage bootstrap --bootstrap-password openstack \
  --bootstrap-region-id RegionOne
 
 
-
-# controller apache 설정
-
+```
+### controller apache 설정
+```
 vi /etc/apache2/apache2.conf 
 ServerName controller
 service apache2 restart
 rm -f /var/lib/keystone/keystone.db
 
-# 관리 계정을 구성
+### 관리 계정을 구성
 export OS_USERNAME=admin
 export OS_PASSWORD=openstack 
 export OS_PROJECT_NAME=admin
@@ -152,9 +210,9 @@ export OS_AUTH_URL=http://controller:35357/v3
 export OS_IDENTITY_API_VERSION=3
 
 export 
-
-# 도메인, 프로젝트, 사용자, 역할 생성
-
+```
+### 도메인, 프로젝트, 사용자, 역할 생성
+```
 openstack project create --domain default \
 --description "Service Project" service
 
@@ -168,28 +226,29 @@ openstack user create --domain default \
 openstack role create user
 
 openstack role add --project demo --user demo user
+```
 
-
-# /etc/keystone/keystone-paste.ini 파일을 편집하여 [pipeline:public_api], [pipeline:admin_api], [pipeline:api_v3] 섹션에서 admin_token_auth 을 제거
-
+### /etc/keystone/keystone-paste.ini 파일을 편집하여 [pipeline:public_api], [pipeline:admin_api], [pipeline:api_v3] 섹션에서 admin_token_auth 을 제거
+```
 vi /etc/keystone/keystone-paste.ini 
 [pipeline:public_api], [pipeline:admin_api], and [pipeline:api_v3] session admin_token_auth 
 
 $ unset OS_AUTH_URL OS_PASSWORD
+```
 
 
-
-# admin 사용자로, 인증 토큰을 요청
+### admin 사용자로, 인증 토큰을 요청
+```
 $ openstack --os-auth-url http://controller:35357/v3 \
   --os-project-domain-name Default --os-user-domain-name Default \
   --os-project-name admin --os-username admin token issue
+```
 
-
-# demo 사용자로, 인증 토큰을 요청
+### demo 사용자로, 인증 토큰을 요청
+```
 $ openstack --os-auth-url http://controller:5000/v3 \
   --os-project-domain-name Default --os-user-domain-name Default \
   --os-project-name demo --os-username demo token issue
-
 
 
 cat <<EOF>>  /root/admin-openrc 
@@ -202,8 +261,6 @@ export OS_AUTH_URL=http://controller:35357/v3
 export OS_IDENTITY_API_VERSION=3
 export OS_IMAGE_API_VERSION=2
 EOF
-
-
 
 cat <<EOF>> /root/demo-openrc
 export OS_PROJECT_DOMAIN_NAME=Default
@@ -219,11 +276,12 @@ EOF
 . admin-openrc
 
 openstack token issue
+```
 
-# controller node  이미지 설치 
+### controller node  이미지 설치 
 
-# controller db 세팅 및  도메인, 프로젝트, 사용자, 역할 생성
-
+### controller db 세팅 및  도메인, 프로젝트, 사용자, 역할 생성
+```
 mysql -uroot -p`cat /root/mysql` -e "CREATE DATABASE glance;"
 mysql -uroot -p`cat /root/mysql`  -e "GRANT ALL PRIVILEGES ON glance.* TO 'glance'@'localhost'   IDENTIFIED BY 'openstack';"
 mysql -uroot -p`cat /root/mysql`  -e "GRANT ALL PRIVILEGES ON glance.* TO 'glance'@'%' IDENTIFIED BY 'openstack';"
@@ -244,12 +302,12 @@ openstack endpoint create --region RegionOne \
 openstack endpoint create --region RegionOne \
  image admin http://controller:9292
 
-
-# 이미지 구성요소 설치 및 구성 
-
+```
+### 이미지 구성요소 설치 및 구성 
+```
 apt install glance
 cp -a /etc/glance/glance-api.conf  /etc/glance/glance-api.conf_org
-cat /etc/glance/glance-api.conf_org | grep  -v ^$ | grep -v ^# > /etc/glance/glance-api.conf
+cat /etc/glance/glance-api.conf_org | grep  -v ^$ | grep -v ^### > /etc/glance/glance-api.conf
 
 vi /etc/glance/glance-api.conf
 
@@ -283,7 +341,7 @@ flavor = keystone
 
 cp -a /etc/glance/glance-registry.conf /etc/glance/glance-registry.conf_org
 
-cat /etc/glance/glance-registry.conf_org | grep -v ^$ | grep -v ^# > /etc/glance/glance-registry.conf
+cat /etc/glance/glance-registry.conf_org | grep -v ^$ | grep -v ^### > /etc/glance/glance-registry.conf
 
 vi /etc/glance/glance-registry.conf
 [database]
@@ -319,13 +377,13 @@ openstack image create "cirros" \
 openstack image list
 
 
+```
+############ compute node 설치  ############
 
-#### compute node 설치  ####
+### contorller 설치와 설정
 
-# contorller 설치와 설정
-
-# # controller db 세팅 및  도메인, 프로젝트, 사용자, 역할 생성
-
+### ### controller db 세팅 및  도메인, 프로젝트, 사용자, 역할 생성
+```
 mysql -uroot -p`cat /root/mysql` -e "CREATE DATABASE nova;"
 mysql -uroot -p`cat /root/mysql` -e "CREATE DATABASE nova_api;"
 
@@ -357,7 +415,7 @@ nova-novncproxy nova-scheduler
 
 
 cp -a /etc/nova/nova.conf /etc/nova/nova.conf_org
-cat /etc/nova/nova.conf_org | grep -v ^$ | grep -v ^# > /etc/nova/nova.conf
+cat /etc/nova/nova.conf_org | grep -v ^$ | grep -v ^### > /etc/nova/nova.conf
 
 vi /etc/nova/nova.conf
 
@@ -412,15 +470,15 @@ service nova-consoleauth restart
 service nova-scheduler restart
 service nova-conductor restart
 service nova-novncproxy restart
+```
 
 
-
-# compute node 설치 와 설정 
-
+### compute node 설치 와 설정 
+```
 apt install nova-compute
 
 cp -a /etc/nova/nova.conf /etc/nova/nova.conf_org
-cat /etc/nova/nova.conf_org | grep -v ^$ | grep -v ^# > /etc/nova/nova.conf
+cat /etc/nova/nova.conf_org | grep -v ^$ | grep -v ^### > /etc/nova/nova.conf
 
 vi /etc/nova/nova.conf
 
@@ -461,21 +519,21 @@ lock_path = /var/lib/nova/tmp
 [libvirt]
 virt_type = qemu
 
-
-# 프로세스 재시작 
-
+```
+### 프로세스 재시작 
+```
 service nova-compute restart
 
 controller node compute service check 
 
 openstack compute service list
 
+```
+### 네트워킹 서비스
 
-# 네트워킹 서비스
-
-# controller node 설치와 설정 
-# DB setting
-
+### controller node 설치와 설정 
+### DB setting
+```
 mysql -uroot -p`cat /root/mysql` -e "CREATE DATABASE neutron;"
 mysql -uroot -p`cat /root/mysql`  -e "GRANT ALL PRIVILEGES ON neutron.* TO 'neutron'@'localhost'   IDENTIFIED BY 'openstack';"
 mysql -uroot -p`cat /root/mysql`  -e "GRANT ALL PRIVILEGES ON neutron.* TO 'neutron'@'%' IDENTIFIED BY 'openstack';"
@@ -499,13 +557,13 @@ openstack endpoint create --region RegionOne \
 openstack endpoint create --region RegionOne \
   network admin http://controller:9696
 
-# controller node network 설치 
+### controller node network 설치 
 apt install neutron-server neutron-plugin-ml2 \
  neutron-linuxbridge-agent neutron-l3-agent neutron-dhcp-agent \
  neutron-metadata-agent
 
 cp -a /etc/neutron/neutron.conf /etc/neutron/neutron.conf_org
-cat /etc/neutron/neutron.conf_org | grep -v ^$ | grep -v ^# > /etc/neutron/neutron.conf
+cat /etc/neutron/neutron.conf_org | grep -v ^$ | grep -v ^### > /etc/neutron/neutron.conf
 
  vi /etc/neutron/neutron.conf
 
@@ -543,7 +601,7 @@ username = nova
 password = openstack
 
 cp -a /etc/neutron/plugins/ml2/ml2_conf.ini /etc/neutron/plugins/ml2/ml2_conf.ini_org
-cat /etc/neutron/plugins/ml2/ml2_conf.ini_org | grep -v ^$ | grep -v ^# > /etc/neutron/plugins/ml2/ml2_conf.ini
+cat /etc/neutron/plugins/ml2/ml2_conf.ini_org | grep -v ^$ | grep -v ^### > /etc/neutron/plugins/ml2/ml2_conf.ini
 
 vi /etc/neutron/plugins/ml2/ml2_conf.ini
 [ml2]
@@ -564,7 +622,7 @@ enable_ipset = True
 
 cp -a /etc/neutron/plugins/ml2/linuxbridge_agent.ini /etc/neutron/plugins/ml2/linuxbridge_agent.ini_org
 
-cat /etc/neutron/plugins/ml2/linuxbridge_agent.ini_org | grep -v ^$ | grep -v ^# > /etc/neutron/plugins/ml2/linuxbridge_agent.ini
+cat /etc/neutron/plugins/ml2/linuxbridge_agent.ini_org | grep -v ^$ | grep -v ^### > /etc/neutron/plugins/ml2/linuxbridge_agent.ini
 
 vi /etc/neutron/plugins/ml2/linuxbridge_agent.ini
 
@@ -586,7 +644,7 @@ l2_population = True
 
 
 cp -a /etc/neutron/l3_agent.ini /etc/neutron/l3_agent.ini_org
-cat /etc/neutron/l3_agent.ini_org | grep -v ^$ | grep -v ^# > /etc/neutron/l3_agent.ini
+cat /etc/neutron/l3_agent.ini_org | grep -v ^$ | grep -v ^### > /etc/neutron/l3_agent.ini
 vi /etc/neutron/l3_agent.ini
 
 [DEFAULT]
@@ -596,7 +654,7 @@ interface_driver = neutron.agent.linux.interface.BridgeInterfaceDriver
 
 cp -a /etc/neutron/dhcp_agent.ini /etc/neutron/dhcp_agent.ini_org
 
-cat /etc/neutron/dhcp_agent.ini_org | grep -v ^$ | grep -v ^# > /etc/neutron/dhcp_agent.ini
+cat /etc/neutron/dhcp_agent.ini_org | grep -v ^$ | grep -v ^### > /etc/neutron/dhcp_agent.ini
 
 vi /etc/neutron/dhcp_agent.ini
 
@@ -608,7 +666,7 @@ enable_isolated_metadata = True
 
 
 cp -a /etc/neutron/metadata_agent.ini /etc/neutron/metadata_agent.ini_org
-cat /etc/neutron/metadata_agent.ini_org | grep -v ^$ | grep -v ^# > /etc/neutron/metadata_agent.ini
+cat /etc/neutron/metadata_agent.ini_org | grep -v ^$ | grep -v ^### > /etc/neutron/metadata_agent.ini
 
 
 
@@ -651,14 +709,14 @@ service neutron-metadata-agent status
 service neutron-l3-agent restart
 service neutron-l3-agent status
 
-
-# compute node network 설치 설정
-
+```
+### compute node network 설치 설정
+```
 apt install neutron-linuxbridge-agent
 
 cp -a /etc/neutron/neutron.conf /etc/neutron/neutron.conf_org
 
-cat /etc/neutron/neutron.conf_org | grep -v ^$ | grep -v ^# > /etc/neutron/neutron.conf
+cat /etc/neutron/neutron.conf_org | grep -v ^$ | grep -v ^### > /etc/neutron/neutron.conf
 
 vi /etc/neutron/neutron.conf
 
@@ -680,7 +738,7 @@ username = neutron
 password = openstack
 
 cp -a  /etc/neutron/plugins/ml2/linuxbridge_agent.ini   /etc/neutron/plugins/ml2/linuxbridge_agent.ini_org
-cat  /etc/neutron/plugins/ml2/linuxbridge_agent.ini | grep -v ^$ | grep -v ^# >  /etc/neutron/plugins/ml2/linuxbridge_agent.ini 
+cat  /etc/neutron/plugins/ml2/linuxbridge_agent.ini | grep -v ^$ | grep -v ^### >  /etc/neutron/plugins/ml2/linuxbridge_agent.ini 
 vi /etc/neutron/plugins/ml2/linuxbridge_agent.ini
 
 [DEFAULT]
@@ -719,19 +777,19 @@ service nova-compute status
 
 service neutron-linuxbridge-agent restart
 service neutron-linuxbridge-agent status
+```
 
-
-# controller node 검증
+### controller node 검증
 neutron ext-list
 
-# 대시보드 설치 
-# controller node 설치 
-
+### 대시보드 설치 
+### controller node 설치 
+```
 apt install openstack-dashboard
 
 vi /etc/openstack-dashboard/local_settings.py
 
-#162번 쨰 줄 부분 주석 처리후 아래 내용 으로 변경 
+###162번 쨰 줄 부분 주석 처리후 아래 내용 으로 변경 
 OPENSTACK_HOST = "controller"
 OPENSTACK_KEYSTONE_URL = "http://%s:5000/v3" % OPENSTACK_HOST
 OPENSTACK_KEYSTONE_DEFAULT_ROLE = "user"
@@ -783,12 +841,12 @@ http://192.168.56.101/horizon
 Domain: default
 ID: ADMIN
 pw: openstack
+```
 
-
-# Block 스토리지 서비스
-# controller node 설치 와 설정
-# controller db 설정
-
+### Block 스토리지 서비스
+### controller node 설치 와 설정
+### controller db 설정
+```
 mysql -uroot -p`cat /root/mysql` -e "CREATE DATABASE cinder;"
 mysql -uroot -p`cat /root/mysql`  -e "GRANT ALL PRIVILEGES ON cinder.* TO 'cinder'@'localhost' IDENTIFIED BY 'openstack';"
 mysql -uroot -p`cat /root/mysql`  -e "GRANT ALL PRIVILEGES ON cinder.* TO 'cinder'@'%' IDENTIFIED BY 'openstack';"
@@ -822,11 +880,11 @@ openstack endpoint create --region RegionOne \
 openstack endpoint create --region RegionOne \
   volumev2 admin http://controller:8776/v2/%\(tenant_id\)s
 
-# cinder 설치 
+### cinder 설치 
 apt install cinder-api cinder-scheduler
 
 cp -a /etc/cinder/cinder.conf /etc/cinder/cinder.conf_org
-cat /etc/cinder/cinder.conf_org | grep -v ^$ | grep -v ^# > /etc/cinder/cinder.conf
+cat /etc/cinder/cinder.conf_org | grep -v ^$ | grep -v ^### > /etc/cinder/cinder.conf
 
 vi /etc/cinder/cinder.conf
 
@@ -872,7 +930,7 @@ service cinder-scheduler status
 service cinder-api restart
 service cinder-api status
 
-# computer node 에 스토리지 노드 설치 하기 
+### computer node 에 스토리지 노드 설치 하기 
 
 apt install lvm2
 pvcreate /dev/sdb
@@ -884,7 +942,7 @@ filter = [ "a/sdb/", "r/.*/"]
 
 
 cp -a /etc/cinder/cinder.conf  /etc/cinder/cinder.conf_org
-cat /etc/cinder/cinder.conf_org | grep -v ^$ | grep -v ^# > /etc/cinder/cinder.conf 
+cat /etc/cinder/cinder.conf_org | grep -v ^$ | grep -v ^### > /etc/cinder/cinder.conf 
 vi /etc/cinder/cinder.conf 
 
 [DEFAULT]
@@ -922,15 +980,18 @@ lock_path = /var/lib/cinder/tmp
 
 service tgt restart
 service cinder-volume restart
+```
 
-# controller node 에서 검증
+### controller node 에서 검증
+
+```
 openstack volume service list
+```
 
 
-
-# Object Storage 설치 
-# controller node 설치 
-
+### Object Storage 설치 
+### controller node 설치 
+```
 openstack user create --domain default --password-prompt swift
 
 openstack role add --project service --user swift admin
@@ -960,7 +1021,7 @@ curl -o /etc/swift/proxy-server.conf https://git.openstack.org/cgit/openstack/sw
 
 cp -a /etc/swift/proxy-server.conf /etc/swift/proxy-server.conf_org
 
-cat /etc/swift/proxy-server.conf_org | grep -v ^$ | grep -v ^# > /etc/swift/proxy-server.conf
+cat /etc/swift/proxy-server.conf_org | grep -v ^$ | grep -v ^### > /etc/swift/proxy-server.conf
 
 vi /etc/swift/proxy-server.conf
 
@@ -974,11 +1035,11 @@ swift_dir = /etc/swift
 pipeline = catch_errors gatekeeper healthcheck proxy-logging cache container_sync bulk ratelimit authtoken keystoneauth container-quotas account-quotas slo dlo versioned_writes proxy-logging proxy-server
 
 [app:proxy-server]
-use = egg:swift#proxy
+use = egg:swift###proxy
 account_autocreate = True
 
 [filter:keystoneauth]
-use = egg:swift#keystoneauth
+use = egg:swift###keystoneauth
 operator_roles = admin,user
 
 [filter:authtoken]
@@ -996,14 +1057,14 @@ delay_auth_decision = True
 
 
 [filter:cache]
-use = egg:swift#memcache
+use = egg:swift###memcache
 memcache_servers = controller:11211
 
 
-# compute node
+### compute node
 apt-get install xfsprogs rsync
 
-# 디스크 파티션  & mount 
+### 디스크 파티션  & mount 
 
 fdisk -l
  fdisk  /dev/sdc
@@ -1060,9 +1121,9 @@ cp -a /etc/swift/object-server.conf /etc/swift/object-server.conf_org
 cp -a /etc/swift/container-server.conf /etc/swift/container-server.conf_org
 
 
-cat /etc/swift/account-server.conf_org | grep -v ^$ | grep -v ^# > /etc/swift/account-server.conf
-cat /etc/swift/object-server.conf_org | grep -v ^$ | grep -v ^# > /etc/swift/object-server.conf
-cat /etc/swift/container-server.conf_org | grep -v ^$ | grep -v ^# > /etc/swift/container-server.conf
+cat /etc/swift/account-server.conf_org | grep -v ^$ | grep -v ^### > /etc/swift/account-server.conf
+cat /etc/swift/object-server.conf_org | grep -v ^$ | grep -v ^### > /etc/swift/object-server.conf
+cat /etc/swift/container-server.conf_org | grep -v ^$ | grep -v ^### > /etc/swift/container-server.conf
 
 vi /etc/swift/account-server.conf
 
@@ -1078,13 +1139,13 @@ mount_check = True
 pipeline = healthcheck recon account-server
 
 [app:account-server]
-use = egg:swift#account
+use = egg:swift###account
 
 [filter:healthcheck]
-use = egg:swift#healthcheck
+use = egg:swift###healthcheck
 
 [filter:recon]
-use = egg:swift#recon
+use = egg:swift###recon
 recon_cache_path = /var/cache/swift
 
 [account-replicator]
@@ -1094,7 +1155,7 @@ recon_cache_path = /var/cache/swift
 [account-reaper]
 
 [filter:xprofile]
-use = egg:swift#xprofile
+use = egg:swift###xprofile
 
 vi  /etc/swift/container-server.conf 
 
@@ -1110,13 +1171,13 @@ mount_check = True
 pipeline = healthcheck recon container-server
 
 [app:container-server]
-use = egg:swift#container
+use = egg:swift###container
 
 [filter:healthcheck]
-use = egg:swift#healthcheck
+use = egg:swift###healthcheck
 
 [filter:recon]
-use = egg:swift#recon
+use = egg:swift###recon
 recon_cache_path = /var/cache/swift
 
 [container-replicator]
@@ -1128,7 +1189,7 @@ recon_cache_path = /var/cache/swift
 [container-sync]
 
 [filter:xprofile]
-use = egg:swift#xprofile
+use = egg:swift###xprofile
 
 
 vi /etc/swift/object-server.conf 
@@ -1144,13 +1205,13 @@ mount_check = True
 pipeline = healthcheck recon object-server
 
 [app:object-server]
-use = egg:swift#object
+use = egg:swift###object
 
 [filter:healthcheck]
-use = egg:swift#healthcheck
+use = egg:swift###healthcheck
 
 [filter:recon]
-use = egg:swift#recon
+use = egg:swift###recon
 recon_cache_path = /var/cache/swift
 recon_lock_path = /var/lock
 
@@ -1163,7 +1224,7 @@ recon_lock_path = /var/lock
 [object-auditor]
 
 [filter:xprofile]
-use = egg:swift#xprofile
+use = egg:swift###xprofile
 
 
 chown -R swift:swift /srv/node
@@ -1171,11 +1232,11 @@ chown -R swift:swift /srv/node
 mkdir -p /var/cache/swift
 chown -R root:swift /var/cache/swift
 chmod -R 775 /var/cache/swift
+```
 
-
-# 링 생성 및 초기화 
-# controller node 진행 
-
+### 링 생성 및 초기화 
+### controller node 진행 
+```
 cd  /etc/swift 
 swift-ring-builder account.builder create 10 3 1
 
@@ -1231,7 +1292,7 @@ curl -o /etc/swift/swift.conf \
   https://git.openstack.org/cgit/openstack/swift/plain/etc/swift.conf-sample?h=stable/ocata
 
 cp -a /etc/swift/swift.conf /etc/swift/swift.conf_org
-cat /etc/swift/swift.conf_org | grep -v ^$ | grep -v ^# > /etc/swift/swift.conf
+cat /etc/swift/swift.conf_org | grep -v ^$ | grep -v ^### > /etc/swift/swift.conf
 
 vi /etc/swift/swift.conf
 
@@ -1244,22 +1305,23 @@ swift_hash_path_prefix = openstack_swift_test_prefix
 scp /etc/swift/swift.conf hcshin@compute:~/
 scp /etc/swift/*.ring.gz hcshin@compute:~/
 
-# compute node 
+### compute node 
 mv /home/hcshin/swift.conf /etc/swift/
 mv /home/hcshin/*.ring.gz /etc/swift/
 chown -R root:swift /etc/swift
 
 
-# controller 프로세스 재시작 
+### controller 프로세스 재시작 
  service memcached restart
  service swift-proxy restart
 
-# copmute node 프로세스 재시작 
+### copmute node 프로세스 재시작 
 swift-init all start
 ps -ef | grep swift
 
-# controller node 검증
+### controller node 검증
 cd /root/
 . demo-openrc 
 
 swift stat
+```
