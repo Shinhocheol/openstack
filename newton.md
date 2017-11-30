@@ -150,9 +150,9 @@ service memcached restart
 
 ### controller db  keystone 계정 설정
 ```
-mysql -uroot -p``cat /root/mysql`` -e "CREATE DATABASE keystone;"
-mysql -uroot -p``cat /root/mysql``  -e "GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'localhost'IDENTIFIED BY 'openstack';"
-mysql -uroot -p``cat /root/mysql``  -e "GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'%'  IDENTIFIED BY 'openstack';"
+mysql -uroot -p`cat /root/mysql` -e "CREATE DATABASE keystone;"
+mysql -uroot -p`cat /root/mysql`  -e "GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'localhost'IDENTIFIED BY 'openstack';"
+mysql -uroot -p`cat /root/mysql`  -e "GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'%'  IDENTIFIED BY 'openstack';"
 ```
 
 ### controller kesytone 설치 
