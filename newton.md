@@ -1,8 +1,11 @@
+2017.11.30 (목) Class 3
+========================
+
 # OPENSTACK 메뉴얼 설치 
- ## 설치 os : ubutu 16.04 LTS
+ ## os ver : ubutu 16.04 LTS
  ## openstack ver ： newton 
-### 각 노드에 hosts 파일 설정 
-```
+  ### 각 노드에 hosts 파일 설정 
+```bash
 vi /etc/hosts
 192.168.56.101    controller
 192.168.56.102     compute 
@@ -38,7 +41,7 @@ chronyc sources
 
 
 ### opnestack 패키지 설치 진행 각 node 설치 
-```
+``` bash
  apt install software-properties-common
 
  add-apt-repository cloud-archive:newton
