@@ -1267,7 +1267,7 @@ swift-ring-builder account.builder \
 
 swift-ring-builder account.builder \
  add --region 1 --zone 1 --ip 192.168.56.102 --port 6202 \
- --device sde1 --weight 100`
+ --device sde1 --weight 100
 
 
 swift-ring-builder account.builder
