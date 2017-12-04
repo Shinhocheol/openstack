@@ -1053,7 +1053,7 @@ project_domain_name = default
 user_domain_name = default
 project_name = service
 username = swift
-password = SWIFT_PASS
+password = openstack
 delay_auth_decision = True
 
 
